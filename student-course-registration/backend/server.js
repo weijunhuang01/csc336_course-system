@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 import db from "./config/db.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import enrollmentRoutes from "./routes/enrollmentRoutes.js";
-import waitlistRoutes from "./routes/waitlistRoutes.js";
 import instructorRoutes from "./routes/instructorRoutes.js";
 import registerRoutes from "./routes/registerRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
@@ -27,7 +26,6 @@ app.get("/health", async (_req, res) => {
 
 app.use("/api/courses", courseRoutes);
 app.use("/api/enrollments", enrollmentRoutes);
-app.use("/api/waitlist", waitlistRoutes);
 app.use("/api/instructor", instructorRoutes);
 app.use("/api/register", registerRoutes);
 app.use("/api/students", studentRoutes);

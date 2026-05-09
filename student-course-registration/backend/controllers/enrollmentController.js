@@ -1,10 +1,3 @@
-async function getNextWaitlistPosition(connection, sectionId) {
-  const [rows] = await connection.query(
-    "SELECT COALESCE(MAX(Position), 0) + 1 AS NextPosition FROM Waitlist WHERE Section_ID = ? FOR UPDATE",
-    [sectionId]
-  );
-  return Number(rows[0].NextPosition);
-}
 
 export async function enrollStudent(req, res) {
   const db = req.app.locals.db;
@@ -66,30 +59,6 @@ export async function enrollStudent(req, res) {
       await connection.commit();
       return res.status(201).json({ message: "Enrollment successful" });
     }
-
-    const [existingWaitlist] = await connection.query(
-      "SELECT Waitlist_ID, Position FROM Waitlist WHERE Student_ID = ? AND Section_ID = ? FOR UPDATE",
-      [studentId, sectionId]
-    );
-    if (existingWaitlist.length) {
-      await connection.rollback();
-      return res.status(200).json({
-        message: "Student already waitlisted",
-        position: existingWaitlist[0].Position
-      });
-    }
-
-    const position = await getNextWaitlistPosition(connection, sectionId);
-    await connection.query(
-      "INSERT INTO Waitlist (Student_ID, Section_ID, Position) VALUES (?, ?, ?)",
-      [studentId, sectionId, position]
-    );
-
-    await connection.commit();
-    return res.status(200).json({
-      message: "Section full. Student added to waitlist.",
-      position
-    });
   } catch (error) {
     await connection.rollback();
     return res.status(500).json({ error: "Enrollment failed", details: error.message });
