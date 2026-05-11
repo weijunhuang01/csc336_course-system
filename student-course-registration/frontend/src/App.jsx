@@ -15,20 +15,23 @@ export default function App() {
     setMessage("");
     const params = new URLSearchParams();
     if (keyword.trim()) params.set("keyword", keyword.trim());
-    const response = await fetch(`${API_BASE}/courses?${params.toString()}`);
+    const response = await fetch(`${API_BASE}/api/courses?${params.toString()}`);
     const data = await response.json();
     setCourses(Array.isArray(data) ? data : []);
   }
 
   async function enroll() {
     setMessage("");
-    const response = await fetch(`${API_BASE}/enroll`, {
+    const response = await fetch(`${API_BASE}/api/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId, sectionId })
+      body: JSON.stringify({
+        student_id: Number(studentId),
+        section_id: Number(sectionId)
+      })
     });
     const data = await response.json();
-    setMessage(data.message || data.error || "Request completed.");
+    setMessage(data.message || data.error || data.details || "Request completed.");
     await searchCourses();
   }
 
@@ -57,24 +60,5 @@ export default function App() {
         message={message}
       />
     </main>
-  );
-}
-import { Navigate, Route, Routes } from "react-router-dom";
-import Navbar from "./components/Navbar.jsx";
-import StudentDashboard from "./pages/StudentDashboard.jsx";
-import InstructorDashboard from "./pages/InstructorDashboard.jsx";
-
-export default function App() {
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar />
-      <main className="mx-auto max-w-6xl p-4">
-        <Routes>
-          <Route path="/" element={<Navigate to="/student" replace />} />
-          <Route path="/student" element={<StudentDashboard />} />
-          <Route path="/instructor" element={<InstructorDashboard />} />
-        </Routes>
-      </main>
-    </div>
   );
 }
