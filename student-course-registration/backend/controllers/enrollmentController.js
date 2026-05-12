@@ -80,12 +80,12 @@ export async function enrollStudent(req, res) {
 
   try {
     await connection.beginTransaction();
-
+    
     const [studentRows] = await connection.query(
       "SELECT Student_ID FROM Students WHERE Student_ID = ? LIMIT 1",
       [sid]
     );
-
+    
     if (studentRows.length === 0) {
       await connection.rollback();
       return res.status(400).json({
@@ -96,15 +96,10 @@ export async function enrollStudent(req, res) {
     }
 
     const [sectionRows] = await connection.query(
-      `
-      SELECT Section_ID, Open_Seats, Capacity
-      FROM Course_Sections
-      WHERE Section_ID = ?
-      FOR UPDATE
-      `,
+      "SELECT Section_ID FROM Course_Sections WHERE Section_ID = ? LIMIT 1",
       [secId]
     );
-
+    
     if (sectionRows.length === 0) {
       await connection.rollback();
       return res.status(404).json({
@@ -112,59 +107,41 @@ export async function enrollStudent(req, res) {
         message: "Section not found"
       });
     }
+    
+    const [spResult] = await connection.query("CALL RegisterStudent(?, ?)", [sid, secId]);
+    const messageRow = spResult[0];
 
-    const openSeats = Number(
-      sectionRows[0].Open_Seats ?? sectionRows[0].open_seats
-    );
-
-    if (!Number.isFinite(openSeats) || openSeats <= 0) {
-      await connection.rollback();
-      return res.status(409).json({
-        success: false,
-        message:
-          "This section is full (no open seats). Choose another section or wait until seats open."
-      });
-    }
-
-    const [existing] = await connection.query(
-      `
-      SELECT Enrollment_ID
-      FROM Enrollments
-      WHERE Student_ID = ?
-      AND Section_ID = ?
-      `,
-      [sid, secId]
-    );
-
-    if (existing.length > 0) {
-      await connection.rollback();
-      return res.status(409).json({
-        success: false,
-        message: "You are already enrolled in this section."
-      });
-    }
-
-    await connection.query(
-      `
-      INSERT INTO Enrollments
-      (Student_ID, Section_ID, Status)
-      VALUES (?, ?, ?)
-      `,
-      [sid, secId, "Enrolled"]
-    );
-
-    const [updateResult] = await connection.query(
-      `
-      UPDATE Course_Sections
-      SET Open_Seats = Open_Seats - 1,
-          Enrolled_Count = GREATEST(0, Capacity - (Open_Seats - 1))
-      WHERE Section_ID = ?
-      AND Open_Seats > 0
-      `,
-      [secId]
-    );
-
-    if (updateResult.affectedRows !== 1) {
+    if (messageRow && messageRow.length > 0) {
+      const message = messageRow[0].Message;
+      if (message === 'Registration Failed: Class Full') {
+        await connection.rollback();
+        return res.status(409).json({
+          success: false,
+          message: "This section is full (no open seats). Choose another section or wait until seats open."
+        });
+      } else if (message === 'Registration Successful') {
+        // Update student payment status after successful registration.
+        // This is not handled by the stored procedure, so we keep it here.
+        await connection.query(
+          `UPDATE Students SET Account_Payment_Status = 'Unpaid' WHERE Student_ID = ?`,
+          [sid]
+        );
+        await connection.commit();
+        return res.status(201).json({
+          success: true,
+          waitlisted: false,
+          message: "Enrollment successful"
+        });
+      } else {
+        // Unexpected message from SP
+        await connection.rollback();
+        return res.status(500).json({
+          success: false,
+          message: `Enrollment failed: Unexpected message from stored procedure: ${message}`
+        });
+      }
+    } else {
+      // SP did not return expected message
       await connection.rollback();
       return res.status(409).json({
         success: false,
@@ -172,18 +149,6 @@ export async function enrollStudent(req, res) {
       });
     }
 
-    await connection.query(
-      `UPDATE Students SET Account_Payment_Status = 'Unpaid' WHERE Student_ID = ?`,
-      [sid]
-    );
-
-    await connection.commit();
-
-    return res.status(201).json({
-      success: true,
-      waitlisted: false,
-      message: "Enrollment successful"
-    });
   } catch (error) {
     await connection.rollback();
     const errno = error.errno;

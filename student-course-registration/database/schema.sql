@@ -126,3 +126,23 @@ CREATE TABLE IF NOT EXISTS App_Accounts (
     FOREIGN KEY (Instructor_ID) REFERENCES Instructors(Instructor_ID)
     ON DELETE CASCADE
 );
+
+DELIMITER ;;
+DROP PROCEDURE IF EXISTS `RegisterStudent`;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `RegisterStudent`(IN p_student_id INT, IN p_section_id INT)
+BEGIN
+    DECLARE seats_left INT;
+    
+    -- Check if there are seats available
+    SELECT Open_Seats INTO seats_left FROM Course_Sections WHERE Section_ID = p_section_id;
+    
+    IF seats_left > 0 THEN
+        INSERT INTO Enrollments (Enrollment_ID, Student_ID, Section_ID, Status) 
+        VALUES (NULL, p_student_id, p_section_id, 'Enrolled');
+        UPDATE Course_Sections SET Open_Seats = Open_Seats - 1 WHERE Section_ID = p_section_id;
+        SELECT 'Registration Successful' AS Message;
+    ELSE
+        SELECT 'Registration Failed: Class Full' AS Message;
+    END IF;
+END ;;
+DELIMITER ;
