@@ -26,7 +26,7 @@ function saveSession(session) {
   }
 }
 
-/** @typedef {{ email: string; role: 'student' | 'instructor'; studentId?: string; instructorId?: string }} SessionUser */
+/** @typedef {{ email: string; role: 'student' | 'instructor' | 'admin'; studentId?: string; instructorId?: string }} SessionUser */
 
 /** Parse response body once; prefer JSON `message` / `error` / `details`, else short text or status hint. */
 async function parseAuthResponse(res) {
@@ -39,12 +39,24 @@ async function parseAuthResponse(res) {
       data = {};
     }
   }
-  const fromJson =
-    data &&
-    typeof data === "object" &&
-    [data.message, data.error, data.details].find(
-      (x) => x != null && String(x).trim() !== ""
-    );
+  let fromJson = null;
+  if (data && typeof data === "object") {
+    const errKey = String(data.error ?? "").toLowerCase();
+    if (errKey === "proxy_error") {
+      const head = data.message ? String(data.message).trim() : "";
+      const parts = [];
+      if (data.hint) parts.push(String(data.hint).trim());
+      if (data.details) parts.push(`(${String(data.details).trim()})`);
+      const tail = parts.filter(Boolean).join(" ");
+      fromJson =
+        [head, tail].filter(Boolean).join(" ").trim() ||
+        "Cannot reach the registration server. Start Express from student-course-registration/backend (npm run dev or npm start), wait for \"Server running\", then try again.";
+    } else {
+      fromJson = [data.message, data.details, data.error].find(
+        (x) => x != null && String(x).trim() !== ""
+      );
+    }
+  }
   const trimmed = text.trim();
   const nonHtmlSnippet =
     trimmed &&
@@ -59,7 +71,11 @@ async function parseAuthResponse(res) {
     ? "The backend on this port is an old process without sign-up routes. Stop it (Ctrl+C in the backend terminal), then run `npm run dev` or `npm start` again from student-course-registration/backend. Open GET /api/auth/ping — you should see JSON with \"routes\", not a 404 HTML page."
     : "Request failed (404). Run `npm run dev` from the frontend folder (not Live Server), leave VITE_API_BASE unset in dev, and start the backend on port 5000 (or set VITE_PROXY_API to match backend/.env PORT).";
   const fallbackOther = `Request failed (${res.status}). Start the backend and use Vite dev so /api is proxied to Express.`;
-  const fallback = res.status === 404 ? fallback404 : fallbackOther;
+  const fallback502 =
+    res.status === 502
+      ? "The dev server could not reach the API (connection refused or wrong port). From student-course-registration/backend run npm run dev or npm start. If Express uses a different port, set the same value in backend/.env PORT and frontend/.env as VITE_PROXY_API (e.g. http://127.0.0.1:5000), then restart npm run dev in frontend."
+      : null;
+  const fallback = fallback502 || (res.status === 404 ? fallback404 : fallbackOther);
   const errorMessage = fromJson || nonHtmlSnippet || fallback;
   return { ok: res.ok, data, errorMessage };
 }

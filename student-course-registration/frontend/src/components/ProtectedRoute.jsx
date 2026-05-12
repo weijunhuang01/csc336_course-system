@@ -18,8 +18,14 @@ export default function ProtectedRoute({ allowedRoles }) {
   }
 
   if (!allowedRoles.includes(user.role)) {
-    const fallback =
-      user.role === "student" ? "/student-dashboard" : "/instructor-dashboard";
+    let fallback = "/";
+    if (user.role === "student") {
+      fallback = "/student-dashboard";
+    } else if (user.role === "instructor") {
+      fallback = "/instructor-dashboard";
+    } else if (user.role === "admin") {
+      fallback = "/admin/revenue";
+    }
     return <Navigate to={fallback} replace />;
   }
 

@@ -17,7 +17,11 @@ export default function SignUpPage() {
   useEffect(() => {
     if (!isReady || !user) return;
     navigate(
-      user.role === "student" ? "/student-dashboard" : "/instructor-dashboard",
+      user.role === "student"
+        ? "/student-dashboard"
+        : user.role === "admin"
+          ? "/admin/revenue"
+          : "/instructor-dashboard",
       { replace: true }
     );
   }, [isReady, user, navigate]);

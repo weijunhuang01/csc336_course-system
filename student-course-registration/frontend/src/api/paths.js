@@ -49,5 +49,12 @@ export const api = {
   instructorPatchSection: (instructorId, sectionId) =>
     apiPath(
       `/api/instructor/${encodeURIComponent(String(instructorId))}/sections/${encodeURIComponent(String(sectionId))}`
-    )
+    ),
+
+  /** months: chart window; range: year | quarter | month (comparison window for growth %) */
+  adminRevenueStats: ({ months = 12, range = "year" } = {}) => {
+    const m = encodeURIComponent(String(months));
+    const r = encodeURIComponent(String(range));
+    return apiPath(`/api/admin/revenue-stats?months=${m}&range=${r}`);
+  }
 };

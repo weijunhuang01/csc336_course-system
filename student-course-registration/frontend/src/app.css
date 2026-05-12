@@ -196,3 +196,17 @@ a.scr-btn-secondary {
     transform: rotate(360deg);
   }
 }
+
+@media print {
+  .scr-print-hide {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .scr-revenue-root {
+    max-width: 100% !important;
+  }
+}

@@ -58,6 +58,12 @@ export default function DashboardShell({ title, children }) {
                   <strong style={{ color: theme.textSecondary }}>{user.instructorId}</strong>
                 </>
               ) : null}
+              {user.role === "admin" ? (
+                <>
+                  {" "}
+                  · <strong style={{ color: theme.textSecondary }}>Administrator</strong>
+                </>
+              ) : null}
             </p>
           ) : null}
         </div>

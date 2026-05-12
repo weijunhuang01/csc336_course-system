@@ -7,7 +7,11 @@ router.get("/ping", (_req, res) => {
   res.json({
     ok: true,
     auth: "App_Accounts",
-    routes: ["POST /api/auth/register", "POST /api/auth/login"]
+    routes: [
+      "POST /api/auth/register",
+      "POST /api/auth/login",
+      "GET /api/admin/revenue-stats"
+    ]
   });
 });
 

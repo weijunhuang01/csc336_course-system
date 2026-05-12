@@ -39,6 +39,15 @@ export default function LandingPage() {
         >
           Sign up
         </Link>
+
+        <p style={{ marginTop: "28px", marginBottom: 0, fontSize: "0.88rem", color: "#64748b" }}>
+          Administrators: sign in with an <strong style={{ color: "#475569" }}>admin</strong> account
+          to open{" "}
+          <Link to="/sign-in" className="scr-link">
+            revenue reporting
+          </Link>
+          .
+        </p>
       </div>
     </main>
   );

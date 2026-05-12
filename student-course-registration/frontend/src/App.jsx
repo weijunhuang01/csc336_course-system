@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import InstructorDashboardPage from "./pages/InstructorDashboardPage.jsx";
@@ -5,6 +6,8 @@ import LandingPage from "./pages/LandingPage.jsx";
 import SignInPage from "./pages/SignInPage.jsx";
 import SignUpPage from "./pages/SignUpPage.jsx";
 import StudentDashboardPage from "./pages/StudentDashboardPage.jsx";
+
+const AdminRevenuePage = lazy(() => import("./pages/AdminRevenuePage.jsx"));
 
 export default function App() {
   return (
@@ -19,6 +22,21 @@ export default function App() {
 
       <Route element={<ProtectedRoute allowedRoles={["instructor"]} />}>
         <Route path="/instructor-dashboard" element={<InstructorDashboardPage />} />
+      </Route>
+
+      <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+        <Route
+          path="/admin/revenue"
+          element={
+            <Suspense
+              fallback={
+                <div style={{ padding: "48px", textAlign: "center", color: "#64748b" }}>Loading…</div>
+              }
+            >
+              <AdminRevenuePage />
+            </Suspense>
+          }
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

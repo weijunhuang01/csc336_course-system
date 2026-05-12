@@ -10,6 +10,7 @@ import instructorRoutes from "./routes/instructorRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import registerRoutes from "./routes/registerRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -50,6 +51,7 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/enrollments", enrollmentRoutes);
 app.use("/api/instructor", instructorRoutes);
@@ -71,7 +73,7 @@ async function startServer() {
       console.log(`Server running on http://localhost:${PORT}`);
       // eslint-disable-next-line no-console
       console.log(
-        "API auth: GET /api/auth/ping | POST /api/auth/register | POST /api/auth/login"
+        "API auth: GET /api/auth/ping | POST /api/auth/register | POST /api/auth/login | GET /api/admin/revenue-stats"
       );
     });
   } catch (error) {

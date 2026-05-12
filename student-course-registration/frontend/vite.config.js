@@ -52,6 +52,8 @@ export default defineConfig(({ mode }) => {
                 res.writeHead(502, { "Content-Type": "application/json" });
                 res.end(
                   JSON.stringify({
+                    message:
+                      "Could not connect to the API server. Start the backend from student-course-registration/backend (npm run dev or npm start).",
                     error: "proxy_error",
                     details: String(err?.message || err),
                     hint: "Start the backend (npm run start in backend/) or fix VITE_PROXY_API / backend PORT."

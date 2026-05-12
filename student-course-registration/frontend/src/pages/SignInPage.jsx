@@ -12,7 +12,11 @@ export default function SignInPage() {
   useEffect(() => {
     if (!isReady || !user) return;
     navigate(
-      user.role === "student" ? "/student-dashboard" : "/instructor-dashboard",
+      user.role === "student"
+        ? "/student-dashboard"
+        : user.role === "admin"
+          ? "/admin/revenue"
+          : "/instructor-dashboard",
       { replace: true }
     );
   }, [isReady, user, navigate]);
@@ -28,7 +32,9 @@ export default function SignInPage() {
     navigate(
       result.user.role === "student"
         ? "/student-dashboard"
-        : "/instructor-dashboard",
+        : result.user.role === "admin"
+          ? "/admin/revenue"
+          : "/instructor-dashboard",
       { replace: true }
     );
   }

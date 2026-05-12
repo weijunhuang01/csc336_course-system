@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "test:enrollments": "node scripts/ping-enrollments.mjs"
+    "test:enrollments": "node scripts/ping-enrollments.mjs",
+    "seed:revenue": "node scripts/seed-revenue-demo.js",
+    "seed:admin": "node scripts/seed-admin-only.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
