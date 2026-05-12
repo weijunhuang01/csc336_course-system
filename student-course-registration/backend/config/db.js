@@ -19,7 +19,7 @@ function envStr(key, fallback = "") {
 const db = mysql.createPool({
   host: envStr("DB_HOST", "localhost"),
   user: envStr("DB_USER", "root"),
-  password: envStr("DB_PASSWORD"),
+  password: envStr("DB_PASSWORD", ""),
   database: envStr("DB_NAME", "student_registration"),
   port: Number(envStr("DB_PORT", "3306")) || 3306,
   waitForConnections: true

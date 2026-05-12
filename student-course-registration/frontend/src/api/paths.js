@@ -38,5 +38,16 @@ export const api = {
       `/api/students/${encodeURIComponent(String(studentId).trim())}/invoices`
     ),
   enroll: () => apiPath("/api/enrollments"),
-  enrollDrop: () => apiPath("/api/enrollments/drop")
+  enrollDrop: () => apiPath("/api/enrollments/drop"),
+
+  instructorSections: (instructorId) =>
+    apiPath(`/api/instructor/${encodeURIComponent(String(instructorId))}/sections`),
+  instructorRoster: (instructorId, sectionId) =>
+    apiPath(
+      `/api/instructor/${encodeURIComponent(String(instructorId))}/sections/${encodeURIComponent(String(sectionId))}/roster`
+    ),
+  instructorPatchSection: (instructorId, sectionId) =>
+    apiPath(
+      `/api/instructor/${encodeURIComponent(String(instructorId))}/sections/${encodeURIComponent(String(sectionId))}`
+    )
 };
