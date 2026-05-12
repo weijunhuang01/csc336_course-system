@@ -1,9 +1,16 @@
 import { Router } from "express";
-import { enrollStudent, updateEnrollmentStatus } from "../controllers/enrollmentController.js";
+import {
+  getEnrollmentsForStudent,
+  enrollStudent,
+  dropStudent
+} from "../controllers/enrollmentController.js";
 
 const router = Router();
 
+router.get("/student/:studentId", getEnrollmentsForStudent);
+
+router.post("/drop", dropStudent);
+
 router.post("/", enrollStudent);
-router.patch("/status", updateEnrollmentStatus);
 
 export default router;

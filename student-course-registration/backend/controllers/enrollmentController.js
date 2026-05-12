@@ -1,93 +1,352 @@
+export async function getEnrollmentsForStudent(req, res) {
+  const db = req.app.locals.db;
+  const raw = req.params.studentId;
+
+  if (raw === undefined || raw === null || String(raw).trim() === "") {
+    return res.status(400).json({
+      success: false,
+      message: "Student ID is required"
+    });
+  }
+
+  const studentId = Number.parseInt(String(raw).trim(), 10);
+  if (!Number.isFinite(studentId) || studentId < 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Student ID must be a non-negative integer"
+    });
+  }
+
+  const sql = [
+    "SELECT",
+    "  e.Enrollment_ID,",
+    "  e.Section_ID,",
+    "  e.`Status`,",
+    "  c.Course_ID,",
+    "  c.Course_Name,",
+    "  c.Credits,",
+    "  c.Base_Cost,",
+    "  cs.Semester,",
+    "  cs.`Schedule`,",
+    "  cs.Room,",
+    "  cs.Capacity,",
+    "  cs.Open_Seats,",
+    "  COALESCE(cs.Enrolled_Count, GREATEST(0, cs.Capacity - cs.Open_Seats)) AS Enrolled_Count",
+    "FROM Enrollments e",
+    "INNER JOIN (",
+    "  SELECT Student_ID, Section_ID, MAX(Enrollment_ID) AS Pick_Enrollment_ID",
+    "  FROM Enrollments",
+    "  WHERE Student_ID = ?",
+    "  GROUP BY Student_ID, Section_ID",
+    ") dedupe ON dedupe.Pick_Enrollment_ID = e.Enrollment_ID",
+    "INNER JOIN Course_Sections cs ON cs.Section_ID = e.Section_ID",
+    "INNER JOIN Courses c ON c.Course_ID = cs.Course_ID",
+    "WHERE e.Student_ID = ?",
+    "ORDER BY c.Course_ID, e.Section_ID"
+  ].join("\n");
+
+  try {
+    const [rows] = await db.query(sql, [studentId, studentId]);
+
+    return res.json(rows);
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[getEnrollmentsForStudent]", error.code || "", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "Unable to load enrollments",
+      details: error.message || String(error),
+      code: error.code
+    });
+  }
+}
 
 export async function enrollStudent(req, res) {
   const db = req.app.locals.db;
+
   const { studentId, sectionId } = req.body;
 
-  if (!studentId || !sectionId) {
-    return res.status(400).json({ error: "studentId and sectionId are required" });
+  const sid = Number.parseInt(String(studentId ?? "").trim(), 10);
+  const secId = Number.parseInt(String(sectionId ?? "").trim(), 10);
+
+  if (!Number.isFinite(sid) || !Number.isFinite(secId)) {
+    return res.status(400).json({
+      success: false,
+      message: "studentId and sectionId must be valid integers."
+    });
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [studentRows] = await connection.query(
+      "SELECT Student_ID FROM Students WHERE Student_ID = ? LIMIT 1",
+      [sid]
+    );
+
+    if (studentRows.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message:
+          "Student record not found. Your Student ID must exist in the Students table (registrar data). Run node add-course-data.js for demo IDs, or ask an admin to add your profile."
+      });
+    }
+
+    const [sectionRows] = await connection.query(
+      `
+      SELECT Section_ID, Open_Seats, Capacity
+      FROM Course_Sections
+      WHERE Section_ID = ?
+      FOR UPDATE
+      `,
+      [secId]
+    );
+
+    if (sectionRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Section not found"
+      });
+    }
+
+    const openSeats = Number(
+      sectionRows[0].Open_Seats ?? sectionRows[0].open_seats
+    );
+
+    if (!Number.isFinite(openSeats) || openSeats <= 0) {
+      await connection.rollback();
+      return res.status(409).json({
+        success: false,
+        message:
+          "This section is full (no open seats). Choose another section or wait until seats open."
+      });
+    }
+
+    const [existing] = await connection.query(
+      `
+      SELECT Enrollment_ID
+      FROM Enrollments
+      WHERE Student_ID = ?
+      AND Section_ID = ?
+      `,
+      [sid, secId]
+    );
+
+    if (existing.length > 0) {
+      await connection.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "You are already enrolled in this section."
+      });
+    }
+
+    await connection.query(
+      `
+      INSERT INTO Enrollments
+      (Student_ID, Section_ID, Status)
+      VALUES (?, ?, ?)
+      `,
+      [sid, secId, "Enrolled"]
+    );
+
+    const [updateResult] = await connection.query(
+      `
+      UPDATE Course_Sections
+      SET Open_Seats = Open_Seats - 1,
+          Enrolled_Count = GREATEST(0, Capacity - (Open_Seats - 1))
+      WHERE Section_ID = ?
+      AND Open_Seats > 0
+      `,
+      [secId]
+    );
+
+    if (updateResult.affectedRows !== 1) {
+      await connection.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "This section just filled up. Try again or pick another section."
+      });
+    }
+
+    await connection.query(
+      `UPDATE Students SET Account_Payment_Status = 'Unpaid' WHERE Student_ID = ?`,
+      [sid]
+    );
+
+    await connection.commit();
+
+    return res.status(201).json({
+      success: true,
+      waitlisted: false,
+      message: "Enrollment successful"
+    });
+  } catch (error) {
+    await connection.rollback();
+    const errno = error.errno;
+    const code = error.code;
+
+    if (errno === 1062 || code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        success: false,
+        message: "You are already enrolled in this section."
+      });
+    }
+
+    if (
+      errno === 1452 ||
+      code === "ER_NO_REFERENCED_2" ||
+      code === "ER_NO_REFERENCED_ROW_2"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Student record not found, or the section is not valid for enrollment. Confirm your Student ID exists in Students and the section exists in Course_Sections."
+      });
+    }
+
+    // eslint-disable-next-line no-console
+    console.error("[enrollStudent]", code || "", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Enrollment could not be completed. Please try again later.",
+      code
+    });
+  } finally {
+    connection.release();
+  }
+}
+
+export async function dropStudent(req, res) {
+  const db = req.app.locals.db;
+
+  const { studentId, sectionId } = req.body;
+
+  const sid = Number.parseInt(String(studentId ?? "").trim(), 10);
+  const secId = Number.parseInt(String(sectionId ?? "").trim(), 10);
+
+  if (!Number.isFinite(sid) || !Number.isFinite(secId)) {
+    return res.status(400).json({
+      success: false,
+      message: "studentId and sectionId must be valid integers."
+    });
   }
 
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
 
-    const [studentRows] = await connection.query(
-      "SELECT Student_ID FROM Students WHERE Student_ID = ?",
-      [studentId]
+    const [rows] = await connection.query(
+      `
+      SELECT Enrollment_ID
+      FROM Enrollments
+      WHERE Student_ID = ?
+      AND Section_ID = ?
+      FOR UPDATE
+      `,
+      [sid, secId]
     );
-    if (!studentRows.length) {
+
+    if (rows.length === 0) {
       await connection.rollback();
-      return res.status(404).json({ error: "Student not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found"
+      });
     }
 
-    const [enrollmentRows] = await connection.query(
-      "SELECT Enrollment_ID, Status FROM Enrollments WHERE Student_ID = ? AND Section_ID = ? FOR UPDATE",
-      [studentId, sectionId]
-    );
-    if (enrollmentRows.length && enrollmentRows[0].Status === "Enrolled") {
-      await connection.rollback();
-      return res.status(200).json({ message: "Student already enrolled" });
-    }
+    const droppedCount = rows.length;
 
-    const [sectionRows] = await connection.query(
-      "SELECT Open_Seats FROM Course_Sections WHERE Section_ID = ? FOR UPDATE",
-      [sectionId]
-    );
-    if (!sectionRows.length) {
-      await connection.rollback();
-      return res.status(404).json({ error: "Section not found" });
-    }
+    for (const row of rows) {
+      const enrollmentId = row.Enrollment_ID ?? row.enrollment_id;
 
-    const availableSeats = Number(sectionRows[0].Open_Seats);
-    if (availableSeats > 0) {
-      if (enrollmentRows.length) {
-        await connection.query(
-          "UPDATE Enrollments SET Status = 'Enrolled' WHERE Enrollment_ID = ?",
-          [enrollmentRows[0].Enrollment_ID]
-        );
-      } else {
-        await connection.query(
-          "INSERT INTO Enrollments (Student_ID, Section_ID, Status) VALUES (?, ?, 'Enrolled')",
-          [studentId, sectionId]
-        );
+      const [invoiceLines] = await connection.query(
+        `
+        SELECT Invoice_ID, COALESCE(Price, 0) AS Price
+        FROM Invoices_Items
+        WHERE Enrollment_ID = ?
+        `,
+        [enrollmentId]
+      );
+
+      for (const line of invoiceLines) {
+        const invoiceId = line.Invoice_ID ?? line.invoice_id;
+        const price = Number(line.Price ?? line.price ?? 0) || 0;
+        if (invoiceId != null) {
+          await connection.query(
+            `
+            UPDATE Invoices
+            SET Total_Amount = GREATEST(0, COALESCE(Total_Amount, 0) - ?)
+            WHERE Invoice_ID = ?
+            `,
+            [price, invoiceId]
+          );
+        }
       }
 
-      await connection.query(
-        "UPDATE Course_Sections SET Open_Seats = Open_Seats - 1 WHERE Section_ID = ?",
-        [sectionId]
-      );
-      await connection.commit();
-      return res.status(201).json({ message: "Enrollment successful" });
+      await connection.query(`DELETE FROM Invoices_Items WHERE Enrollment_ID = ?`, [
+        enrollmentId
+      ]);
     }
+
+    await connection.query(
+      `
+      DELETE FROM Enrollments
+      WHERE Student_ID = ?
+      AND Section_ID = ?
+      `,
+      [sid, secId]
+    );
+
+    await connection.query(
+      `
+      UPDATE Course_Sections
+      SET Open_Seats = Open_Seats + ?
+      WHERE Section_ID = ?
+      `,
+      [droppedCount, secId]
+    );
+
+    await connection.query(
+      `
+      UPDATE Course_Sections
+      SET Enrolled_Count = GREATEST(0, Capacity - Open_Seats)
+      WHERE Section_ID = ?
+      `,
+      [secId]
+    );
+
+    await connection.commit();
+
+    return res.json({
+      success: true,
+      message: "Course dropped successfully"
+    });
   } catch (error) {
     await connection.rollback();
-    return res.status(500).json({ error: "Enrollment failed", details: error.message });
+    const errno = error.errno;
+    const code = error.code;
+    // eslint-disable-next-line no-console
+    console.error("[dropStudent]", code || "", error.message);
+
+    if (errno === 1451 || code === "ER_ROW_IS_REFERENCED_2") {
+      return res.status(409).json({
+        success: false,
+        message:
+          "This enrollment is still linked to billing records. Contact support or remove related invoice lines first."
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Could not drop the course. Please try again.",
+      details: error.message
+    });
   } finally {
     connection.release();
-  }
-}
-
-export async function updateEnrollmentStatus(req, res) {
-  const db = req.app.locals.db;
-  const { studentId, sectionId, status } = req.body;
-
-  if (!studentId || !sectionId || !status) {
-    return res.status(400).json({ error: "studentId, sectionId, and status are required" });
-  }
-  if (!["Enrolled", "Dropped"].includes(status)) {
-    return res.status(400).json({ error: "status must be Enrolled or Dropped" });
-  }
-
-  try {
-    const [result] = await db.query(
-      "UPDATE Enrollments SET Status = ? WHERE Student_ID = ? AND Section_ID = ?",
-      [status, studentId, sectionId]
-    );
-    if (!result.affectedRows) {
-      return res.status(404).json({ error: "Enrollment not found" });
-    }
-    return res.status(200).json({ message: "Enrollment status updated" });
-  } catch (error) {
-    return res.status(500).json({ error: "Status update failed", details: error.message });
   }
 }

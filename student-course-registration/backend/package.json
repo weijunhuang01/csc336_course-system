@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:enrollments": "node scripts/ping-enrollments.mjs"
   },
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
